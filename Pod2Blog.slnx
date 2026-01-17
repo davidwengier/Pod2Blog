@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Solution>
+  <Project Path="Pod2Blog.Web\Pod2Blog.Web.csproj" Type="C#" />
+  <Project Path="Pod2Blog.Tests\Pod2Blog.Tests.csproj" Type="C#" />
+</Solution>

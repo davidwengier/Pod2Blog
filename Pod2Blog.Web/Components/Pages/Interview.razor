@@ -1,0 +1,565 @@
+@page "/interview"
+@using Pod2Blog.Models
+@using Pod2Blog.Services
+@using Microsoft.JSInterop
+@inject IAIService AIService
+@inject ILocalStorageService LocalStorageService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Podcast Interview - Pod2Blog</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>🎙️ Podcast Interview: @Topic</h2>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary btn-sm" @onclick="GoHome">
+                        🏠 Home
+                    </button>
+                    <a href="settings" class="btn btn-outline-secondary btn-sm">
+                        <span style="font-size: 1rem;">⚙️</span> Settings
+                    </a>
+                </div>
+            </div>
+            
+            @if (!interviewStarted)
+            {
+                @if (!string.IsNullOrEmpty(speechRecognitionError))
+                {
+                    <div class="alert alert-danger">
+                        <strong>⚠️ Setup Error:</strong>
+                        <div class="mt-2" style="white-space: pre-line;">@speechRecognitionError</div>
+                    </div>
+                }
+                
+                <div class="alert alert-info">
+                    <strong>Ready to start?</strong> Click the button below to begin the interview. 
+                    The AI will ask you questions, and you can respond using your microphone.
+                    <div class="mt-2">
+                        <small>🎤 <strong>Note:</strong> Your microphone will be active automatically once the AI asks each question. 
+                        Try to find a quiet room to work in for the best transcription quality.</small>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-lg" @onclick="StartInterview">Start Interview</button>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Conversation History</h5>
+                    </div>
+                    <div class="card-body" id="conversationHistory" style="max-height: 500px; overflow-y: auto;">
+                        @if (session.Conversation.Count == 0 && isGeneratingQuestion)
+                        {
+                            <div class="text-center text-muted py-4">
+                                <div class="spinner-border spinner-border-sm me-2"></div>
+                                AI is thinking of the first question...
+                            </div>
+                        }
+                        
+                        @for (int i = 0; i < session.Conversation.Count; i++)
+                        {
+                            var turn = session.Conversation[i];
+                            var isLastAIMessage = turn.Speaker == "AI" && i == session.Conversation.Count - 1;
+                            var highlightClass = isLastAIMessage ? "alert alert-primary" : "";
+                            var textClass = turn.Speaker == "AI" ? "text-primary" : "text-success";
+                            
+                            <div class="mb-3 @highlightClass @textClass" style="@(isLastAIMessage ? "padding: 1rem;" : "")">
+                                <strong>@(turn.Speaker == "AI" ? "🤖 AI" : "👤 You"):</strong> @turn.Text
+                            </div>
+                        }
+                        
+                        @if (isGeneratingQuestion && session.Conversation.Count > 0)
+                        {
+                            <div class="text-muted mb-3">
+                                <div class="spinner-border spinner-border-sm me-2"></div>
+                                AI is thinking...
+                            </div>
+                        }
+                        
+                        @* Show text input when in text mode and there's a question waiting *@
+                        @if (useTextInput && !isGeneratingQuestion && session.Conversation.Count > 0 && session.Conversation.Last().Speaker == "AI")
+                        {
+                            <div class="alert alert-info mb-3">
+                                <strong>⌨️ Type Your Response</strong>
+                                <textarea class="form-control mt-2" 
+                                          rows="4" 
+                                          @bind="typedResponse" 
+                                          placeholder="Type your answer here..."
+                                          autofocus></textarea>
+                            </div>
+                            <div class="d-flex gap-2 mb-3">
+                                <button class="btn btn-primary" @onclick="SubmitTypedResponse" disabled="@string.IsNullOrWhiteSpace(typedResponse)">
+                                    💬 Submit Response
+                                </button>
+                                <button class="btn btn-warning" @onclick="SubmitTypedResponseAndWrapUp" disabled="@string.IsNullOrWhiteSpace(typedResponse)">
+                                    🎬 Submit & Wrap Up
+                                </button>
+                            </div>
+                        }
+                        
+                        @if (isRecording && !useTextInput)
+                        {
+                            <div class="alert alert-danger mb-3">
+                                <strong>🔴 Recording...</strong> Speak your response now.
+                                @if (autoPauseEnabled)
+                                {
+                                    <small class="d-block mt-1">⏸️ Will automatically continue when you pause for @autoPauseSeconds seconds</small>
+                                }
+                                @if (!string.IsNullOrEmpty(speechRecognitionError))
+                                {
+                                    <div class="mt-2 text-danger">
+                                        <small>⚠️ @speechRecognitionError</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(currentTranscript) && isRecording && !useTextInput)
+                        {
+                            <div class="alert alert-secondary mb-3">
+                                <strong>Your response:</strong> @currentTranscript
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-center gap-2 flex-wrap">
+                            @if (isRecording && !useTextInput)
+                            {
+                                <button class="btn btn-danger" @onclick="StopRecording">💬 I'm Done, Back to You</button>
+                                <button class="btn btn-warning" @onclick="StopRecordingAndWrapUp">🎬 I'm Done, Let's Wrap It Up</button>
+                            }
+                            else if (isGeneratingQuestion)
+                            {
+                                <div class="text-muted">
+                                    <span class="spinner-border spinner-border-sm me-2"></span>AI is thinking...
+                                </div>
+                            }
+                            
+                            @if (!isGeneratingQuestion && !isRecording && session.Conversation.Count > 0)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleInputMode">
+                                    @if (useTextInput)
+                                    {
+                                        <text>🎤 Switch to Voice</text>
+                                    }
+                                    else
+                                    {
+                                        <text>⌨️ Switch to Text</text>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string Topic { get; set; } = "";
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Outline { get; set; }
+
+    private PodcastSession session = new();
+    private bool interviewStarted = false;
+    private bool isGeneratingQuestion = false;
+    private bool isRecording = false;
+    private bool isWrappingUp = false;
+    private bool autoPauseEnabled = false;
+    private int autoPauseSeconds = 3;
+    private string currentQuestion = "";
+    private string currentTranscript = "";
+    private string speechRecognitionError = "";
+    private DotNetObjectReference<Interview>? dotNetRef;
+    private bool speechRecognitionInitialized = false;
+    private bool shouldScrollToBottom = false;
+    private bool useTextInput = false;
+    private string typedResponse = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            dotNetRef = DotNetObjectReference.Create(this);
+            try
+            {
+                speechRecognitionInitialized = await JS.InvokeAsync<bool>("Pod2Blog.initializeSpeechRecognition", dotNetRef);
+                if (!speechRecognitionInitialized)
+                {
+                    speechRecognitionError = "Speech recognition not supported. Switching to text input mode.";
+                    useTextInput = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                speechRecognitionError = $"Speech recognition not available. Using text input mode instead.";
+                useTextInput = true;
+            }
+            StateHasChanged();
+        }
+        
+        // Scroll to bottom after DOM is updated
+        if (shouldScrollToBottom)
+        {
+            shouldScrollToBottom = false;
+            await ScrollToBottom();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrWhiteSpace(Topic))
+        {
+            Navigation.NavigateTo("");
+            return;
+        }
+        session.Topic = Topic;
+        session.Outline = Outline;
+    }
+
+    private async Task StartInterview()
+    {
+        interviewStarted = true;
+        await GenerateNextQuestion();
+    }
+
+    private async Task GenerateNextQuestion()
+    {
+        isGeneratingQuestion = true;
+        currentQuestion = "";
+        StateHasChanged();
+
+        var previousQuestions = session.Conversation
+            .Where(t => t.Speaker == "AI")
+            .Select(t => t.Text)
+            .ToList();
+
+        var lastResponse = session.Conversation
+            .LastOrDefault(t => t.Speaker == "User")?.Text;
+
+        currentQuestion = await AIService.GenerateInterviewQuestionAsync(Topic, previousQuestions, lastResponse, session.Outline);
+        
+        session.Conversation.Add(new ConversationTurn
+        {
+            Speaker = "AI",
+            Text = currentQuestion
+        });
+
+        isGeneratingQuestion = false;
+        shouldScrollToBottom = true;
+        StateHasChanged();
+
+        // Read question aloud if voice is enabled
+        await SpeakIfEnabled(currentQuestion);
+
+        // Automatically start recording after the question is asked
+        await StartRecording();
+    }
+
+    private async Task SpeakIfEnabled(string text)
+    {
+        try
+        {
+            var configJson = await LocalStorageService.GetItemAsync("aiConfig");
+            if (!string.IsNullOrEmpty(configJson))
+            {
+                var config = System.Text.Json.JsonSerializer.Deserialize<AIConfiguration>(configJson);
+                if (config?.EnableVoice == true)
+                {
+                    // Use browser TTS with configured settings
+                    await JS.InvokeVoidAsync("speakText", text, config.VoiceName ?? "", config.VoiceSpeed, config.VoicePitch);
+                    Console.WriteLine("Browser TTS completed, ready for recording");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Silent fail - voice is optional
+            Console.WriteLine($"Failed to speak text: {ex.Message}");
+        }
+    }
+
+    private async Task StartRecording()
+    {
+        if (useTextInput)
+        {
+            // Text input mode - just show the text box
+            isRecording = true;
+            typedResponse = "";
+            shouldScrollToBottom = true;
+            StateHasChanged();
+            return;
+        }
+        
+        if (!speechRecognitionInitialized)
+        {
+            speechRecognitionError = "Speech recognition not available. Please check browser compatibility.";
+            return;
+        }
+
+        isRecording = true;
+        currentTranscript = "";
+        speechRecognitionError = "";
+        shouldScrollToBottom = true;
+        
+        // Stop any ongoing speech when user starts talking
+        try
+        {
+            await JS.InvokeVoidAsync("stopSpeaking");
+        }
+        catch { /* Silent fail */ }
+        
+        // Get auto-pause settings
+        bool enableAutoPause = false;
+        int pauseSeconds = 3;
+        
+        try
+        {
+            var configJson = await LocalStorageService.GetItemAsync("aiConfig");
+            if (!string.IsNullOrEmpty(configJson))
+            {
+                var config = System.Text.Json.JsonSerializer.Deserialize<AIConfiguration>(configJson);
+                if (config != null)
+                {
+                    enableAutoPause = config.EnableAutoPause;
+                    pauseSeconds = config.AutoPauseSeconds;
+                    
+                    // Store for UI display
+                    autoPauseEnabled = enableAutoPause;
+                    autoPauseSeconds = pauseSeconds;
+                }
+            }
+        }
+        catch { /* Silent fail */ }
+        
+        try
+        {
+            await JS.InvokeVoidAsync("Pod2Blog.startRecording", enableAutoPause, pauseSeconds);
+        }
+        catch (Exception ex)
+        {
+            speechRecognitionError = $"Failed to start recording: {ex.Message}";
+            isRecording = false;
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task StopRecording()
+    {
+        isRecording = false;
+        
+        try
+        {
+            await JS.InvokeVoidAsync("Pod2Blog.stopRecording");
+        }
+        catch (Exception ex)
+        {
+            speechRecognitionError = $"Error stopping recording: {ex.Message}";
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task StopRecordingAndWrapUp()
+    {
+        isWrappingUp = true;
+        await StopRecording();
+    }
+
+    [JSInvokable]
+    public void OnTranscriptUpdate(string transcript)
+    {
+        currentTranscript = transcript;
+        shouldScrollToBottom = true;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnRecognitionError(string error)
+    {
+        // Provide more helpful error messages
+        if (error == "network")
+        {
+            speechRecognitionError = "Microphone access error. Please:\n1. Check that you're using HTTPS (https://wengier.com)\n2. Click the microphone icon in your browser address bar and allow access\n3. Reload the page and try again";
+        }
+        else if (error == "not-allowed" || error == "permission-denied")
+        {
+            speechRecognitionError = "Microphone permission denied. Please allow microphone access in your browser settings and reload.";
+        }
+        else if (error == "no-speech")
+        {
+            speechRecognitionError = "No speech detected. Please speak into your microphone.";
+        }
+        else
+        {
+            speechRecognitionError = $"Recognition error: {error}";
+        }
+        
+        isRecording = false;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnRecognitionEnd(string finalTranscript)
+    {
+        isRecording = false;
+        currentTranscript = finalTranscript;
+        
+        if (!string.IsNullOrWhiteSpace(currentTranscript))
+        {
+            session.Conversation.Add(new ConversationTurn
+            {
+                Speaker = "User",
+                Text = currentTranscript
+            });
+
+            currentTranscript = "";
+            shouldScrollToBottom = true;
+            
+            // If wrapping up, just add a simple closing and finish
+            if (isWrappingUp)
+            {
+                session.Conversation.Add(new ConversationTurn
+                {
+                    Speaker = "AI",
+                    Text = "Thanks for joining me! Let's turn this into a great blog post."
+                });
+                
+                shouldScrollToBottom = true;
+                StateHasChanged();
+                
+                // Navigate to blog preview
+                await Task.Delay(1500);
+                FinishInterview();
+            }
+            else
+            {
+                await GenerateNextQuestion();
+            }
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task GoHome()
+    {
+        await StopAllSpeech();
+        Navigation.NavigateTo("");
+    }
+
+    private void ToggleInputMode()
+    {
+        useTextInput = !useTextInput;
+        if (useTextInput)
+        {
+            speechRecognitionError = "Text input mode active. Type your responses instead of speaking.";
+        }
+        else
+        {
+            speechRecognitionError = "";
+        }
+        StateHasChanged();
+    }
+
+    private async Task SubmitTypedResponse()
+    {
+        if (!string.IsNullOrWhiteSpace(typedResponse))
+        {
+            isRecording = false;
+            
+            session.Conversation.Add(new ConversationTurn
+            {
+                Speaker = "User",
+                Text = typedResponse.Trim()
+            });
+
+            typedResponse = "";
+            shouldScrollToBottom = true;
+            StateHasChanged();
+            
+            await GenerateNextQuestion();
+        }
+    }
+
+    private async Task SubmitTypedResponseAndWrapUp()
+    {
+        if (!string.IsNullOrWhiteSpace(typedResponse))
+        {
+            isWrappingUp = true;
+            isRecording = false;
+            
+            session.Conversation.Add(new ConversationTurn
+            {
+                Speaker = "User",
+                Text = typedResponse.Trim()
+            });
+
+            session.Conversation.Add(new ConversationTurn
+            {
+                Speaker = "AI",
+                Text = "Thanks for joining me! Let's turn this into a great blog post."
+            });
+
+            typedResponse = "";
+            shouldScrollToBottom = true;
+            StateHasChanged();
+            
+            await Task.Delay(1500);
+            FinishInterview();
+        }
+    }
+
+    private void FinishInterview()
+    {
+        // Store the session in local storage for the blog preview page
+        Navigation.NavigateTo($"blog-preview?sessionData={Uri.EscapeDataString(System.Text.Json.JsonSerializer.Serialize(session))}");
+    }
+
+    private async Task StopAllSpeech()
+    {
+        try
+        {
+            // Stop browser TTS
+            await JS.InvokeVoidAsync("stopSpeaking");
+            // Stop any audio playback
+            await JS.InvokeVoidAsync("stopAllAudio");
+        }
+        catch
+        {
+            // Silent fail
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToBottom", "conversationHistory");
+        }
+        catch
+        {
+            // Silently fail if scrolling doesn't work
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Stop all speech when leaving page
+        await StopAllSpeech();
+        
+        if (dotNetRef != null)
+        {
+            dotNetRef.Dispose();
+        }
+    }
+}

@@ -1,0 +1,408 @@
+@page "/settings"
+@using Pod2Blog.Models
+@using Pod2Blog.Services
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Microsoft.JSInterop
+@inject ILocalStorageService LocalStorage
+@inject NavigationManager Navigation
+@inject IAIService AIService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Settings - Pod2Blog</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 mx-auto">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>⚙️ Settings</h2>
+                    <p class="text-muted mb-0">Configure your podcast interview experience</p>
+                </div>
+                <a href="" class="btn btn-secondary">🏠 Home</a>
+            </div>
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show">
+                    @successMessage
+                    <button type="button" class="btn-close" @onclick="@(() => successMessage = "")"></button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show">
+                    @errorMessage
+                    <button type="button" class="btn-close" @onclick="@(() => errorMessage = "")"></button>
+                </div>
+            }
+
+            <!-- AI Configuration Section -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🤖 GitHub Models Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Step-by-step PAT Guide -->
+                    <div class="alert alert-info mb-4">
+                        <h6 class="mb-2">📋 Quick Setup (One-time, ~30 seconds)</h6>
+                        <ol class="mb-2 ps-3">
+                            <li>Click the button below to create a new GitHub token</li>
+                            <li>On GitHub: Click <strong>"Generate token"</strong> at the bottom</li>
+                            <li>Copy the token and paste it in the field below</li>
+                        </ol>
+                        <a href="https://github.com/settings/personal-access-tokens/new?description=Pod2Blog%20AI%20Access&scopes=" 
+                           target="_blank" 
+                           class="btn btn-success btn-sm">
+                            🔗 Create GitHub Token
+                        </a>
+                        <p class="small text-muted mt-2 mb-0">
+                            <strong>Note:</strong> No permissions/scopes needed! GitHub Models works with any authenticated token.
+                        </p>
+                    </div>
+
+                    <!-- Token Entry -->
+                    <div class="mb-3">
+                        <label class="form-label"><strong>GitHub Personal Access Token</strong></label>
+                        <div class="input-group">
+                            <input type="@(showApiKey ? "text" : "password")" 
+                                   class="form-control" 
+                                   @bind="config.ApiKey" 
+                                   placeholder="github_pat_..." />
+                            <button class="btn btn-outline-secondary" type="button" @onclick="ToggleApiKeyVisibility">
+                                @(showApiKey ? "👁️" : "👁️‍🗨️")
+                            </button>
+                        </div>
+                        <small class="text-muted">Your token is stored locally in your browser and never sent to any server except GitHub.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Model</strong></label>
+                        <input type="text" class="form-control" @bind="config.Model" placeholder="gpt-4o-mini" />
+                        <small class="text-muted">Recommended: gpt-4o-mini (fast & free)</small>
+                    </div>
+
+                    <button class="btn btn-outline-secondary" @onclick="TestConfiguration" disabled="@(isTesting || string.IsNullOrWhiteSpace(config.ApiKey))">
+                        @if (isTesting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        🧪 Test Connection
+                    </button>
+                </div>
+            </div>
+
+            <!-- Voice Settings Section -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">🔊 Voice Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="enableVoice" @bind="config.EnableVoice">
+                        <label class="form-check-label" for="enableVoice">
+                            <strong>Enable Voice Responses</strong>
+                        </label>
+                    </div>
+
+                    @if (config.EnableVoice)
+                    {
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label"><strong>Voice</strong></label>
+                                <select class="form-select" @bind="config.VoiceName">
+                                    <option value="">Default Voice</option>
+                                    @foreach (var voice in availableVoices)
+                                    {
+                                        <option value="@voice.Name">@voice.Name (@voice.Lang)</option>
+                                    }
+                                </select>
+                                <small class="text-muted">Browser text-to-speech voice</small>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label"><strong>Speed</strong></label>
+                                <input type="range" class="form-range" @bind="config.VoiceSpeed" @bind:event="oninput" min="0.5" max="2.0" step="0.1" />
+                                <small class="text-muted">@config.VoiceSpeed.ToString("F1")x</small>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label"><strong>Pitch</strong></label>
+                                <input type="range" class="form-range" @bind="config.VoicePitch" @bind:event="oninput" min="0.5" max="2.0" step="0.1" />
+                                <small class="text-muted">@config.VoicePitch.ToString("F1")</small>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-sm btn-outline-primary" @onclick="TestVoice">
+                            🎤 Test Voice
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Interview Settings Section -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">🎙️ Interview Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="enableAutoPause" @bind="config.EnableAutoPause">
+                        <label class="form-check-label" for="enableAutoPause">
+                            <strong>Auto-Detect Pauses</strong>
+                        </label>
+                    </div>
+
+                    @if (config.EnableAutoPause)
+                    {
+                        <div class="mb-3">
+                            <label for="pauseSeconds" class="form-label"><strong>Pause Duration</strong></label>
+                            <div class="input-group" style="max-width: 300px;">
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="pauseSeconds" 
+                                       @bind="config.AutoPauseSeconds" 
+                                       min="1" 
+                                       max="10"
+                                       step="1" />
+                                <span class="input-group-text">seconds</span>
+                            </div>
+                            <small class="text-muted">How long to wait after you stop speaking before moving to the next question</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex gap-2 mb-4">
+                <button class="btn btn-primary" @onclick="SaveConfiguration" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    💾 Save All Settings
+                </button>
+                <button class="btn btn-outline-danger" @onclick="ClearConfiguration">
+                    🗑️ Clear All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private AIConfiguration config = new();
+    private bool showApiKey = false;
+    private bool isSaving = false;
+    private bool isTesting = false;
+    private string successMessage = "";
+    private string errorMessage = "";
+    private List<VoiceInfo> availableVoices = new();
+
+    public class VoiceInfo
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+        
+        [JsonPropertyName("lang")]
+        public string Lang { get; set; } = "";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadConfiguration();
+        await LoadVoices();
+    }
+
+    private async Task LoadConfiguration()
+    {
+        var configJson = await LocalStorage.GetItemAsync("aiConfig");
+        if (!string.IsNullOrEmpty(configJson))
+        {
+            try
+            {
+                config = JsonSerializer.Deserialize<AIConfiguration>(configJson) ?? new AIConfiguration();
+            }
+            catch
+            {
+                config = new AIConfiguration();
+            }
+        }
+    }
+
+    private async Task LoadVoices()
+    {
+        try
+        {
+            // Call the JavaScript function to get voices as a serialized JSON string
+            var voicesJson = await JS.InvokeAsync<string>("eval", @"
+                (async () => {
+                    const voices = await window.getVoices();
+                    console.log('Sample voice:', voices[0]);
+                    return JSON.stringify(voices.map(v => ({ name: v.name, lang: v.lang })));
+                })()
+            ");
+            
+            Console.WriteLine($"Received voices JSON length: {voicesJson?.Length ?? 0}");
+            Console.WriteLine($"First 500 chars: {voicesJson?.Substring(0, Math.Min(500, voicesJson?.Length ?? 0))}");
+            
+            if (!string.IsNullOrEmpty(voicesJson))
+            {
+                var allVoices = JsonSerializer.Deserialize<List<VoiceInfo>>(voicesJson) ?? new List<VoiceInfo>();
+                
+                Console.WriteLine($"Total voices deserialized: {allVoices.Count}");
+                if (allVoices.Count > 0)
+                {
+                    Console.WriteLine($"Sample voice: Name='{allVoices[0].Name}', Lang='{allVoices[0].Lang}'");
+                }
+                
+                // Filter to English voices only
+                availableVoices = allVoices
+                    .Where(v => !string.IsNullOrEmpty(v.Lang) && v.Lang.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(v => v.Name)
+                    .ToList();
+                
+                Console.WriteLine($"Loaded {availableVoices.Count} English voices out of {allVoices.Count} total");
+                
+                if (availableVoices.Count > 0)
+                {
+                    Console.WriteLine($"First English voice: Name='{availableVoices[0].Name}', Lang='{availableVoices[0].Lang}'");
+                }
+                else if (allVoices.Count > 0)
+                {
+                    // Show what languages we actually have
+                    var languages = allVoices.Select(v => v.Lang).Distinct().Take(10).ToList();
+                    Console.WriteLine($"Available languages (first 10): {string.Join(", ", languages)}");
+                }
+                
+                StateHasChanged(); // Force UI update
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load voices: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+    }
+
+
+
+    private void ToggleApiKeyVisibility()
+    {
+        showApiKey = !showApiKey;
+    }
+
+    private async Task SaveConfiguration()
+    {
+        isSaving = true;
+        errorMessage = "";
+        successMessage = "";
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(config.ApiKey))
+            {
+                errorMessage = "Please enter an API key";
+                return;
+            }
+
+            var configJson = JsonSerializer.Serialize(config);
+            await LocalStorage.SetItemAsync("aiConfig", configJson);
+            successMessage = "✅ Settings saved successfully!";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task TestConfiguration()
+    {
+        isTesting = true;
+        errorMessage = "";
+        successMessage = "";
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(config.ApiKey))
+            {
+                errorMessage = "Please enter an API key first";
+                return;
+            }
+
+            await SaveConfiguration();
+            
+            var testResponse = await AIService.GenerateInterviewQuestionAsync(
+                "testing connection", 
+                new List<string>(), 
+                null
+            );
+
+            if (testResponse.StartsWith("⚠️ Error"))
+            {
+                errorMessage = testResponse;
+            }
+            else
+            {
+                successMessage = "✅ AI connection successful!";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"❌ Connection test failed: {ex.Message}";
+        }
+        finally
+        {
+            isTesting = false;
+        }
+    }
+
+    private async Task ClearConfiguration()
+    {
+        await LocalStorage.RemoveItemAsync("aiConfig");
+        config = new AIConfiguration();
+        successMessage = "Settings cleared";
+    }
+
+    private async Task TestVoice()
+    {
+        // Clear any previous error before testing
+        errorMessage = "";
+        
+        try
+        {
+            await JS.InvokeVoidAsync("speakText", 
+                "Hello! This is a test of the voice settings. If you can hear this, everything is working correctly.", 
+                config.VoiceName, 
+                config.VoiceSpeed, 
+                config.VoicePitch);
+        }
+        catch (Exception ex)
+        {
+            // Don't show error for interruption - that's intentional when user clicks test again
+            if (!ex.Message.Contains("interrupted", StringComparison.OrdinalIgnoreCase) &&
+                !ex.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = $"Voice test failed: {ex.Message}";
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("stopAllAudio");
+        }
+        catch
+        {
+            // Silent fail
+        }
+    }
+}

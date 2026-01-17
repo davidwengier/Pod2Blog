@@ -1,0 +1,200 @@
+@page "/blog-preview"
+@using Pod2Blog.Services
+@using Pod2Blog.Models
+@using System.Text.Json
+@using Microsoft.JSInterop
+@inject IAIService AIService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Blog Preview - Pod2Blog</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 mx-auto">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>📝 Your Generated Blog Post</h2>
+                <div>
+                    <a href="" class="btn btn-secondary me-2">🏠 Home</a>
+                    <a href="settings" class="btn btn-outline-secondary">⚙️ Settings</a>
+                </div>
+            </div>
+            
+            @if (isGenerating)
+            {
+                <div class="alert alert-info">
+                    <div class="spinner-border spinner-border-sm me-2"></div>
+                    <strong>Generating your blog post...</strong> This may take a moment.
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> @errorMessage
+                </div>
+                <button class="btn btn-primary" @onclick="@(() => Navigation.NavigateTo(""))">Start Over</button>
+            }
+            else if (!string.IsNullOrEmpty(blogPost))
+            {
+                @if (interviewSession != null && interviewSession.Conversation.Any())
+                {
+                    <div class="card mb-3">
+                        <div class="card-header" style="cursor: pointer;" @onclick="ToggleTranscript">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">📝 Original Interview Transcript</h5>
+                                <small class="text-muted">@(showTranscript ? "▼ Click to collapse" : "▶ Click to expand")</small>
+                            </div>
+                        </div>
+                        @if (showTranscript)
+                        {
+                            <div class="card-body" style="max-height: 400px; overflow-y: auto; background-color: #f8f9fa;">
+                                @foreach (var turn in interviewSession.Conversation)
+                                {
+                                    <div class="mb-3 @(turn.Speaker == "AI" ? "text-primary" : "text-success")">
+                                        <strong>@(turn.Speaker == "AI" ? "🤖 AI" : "👤 You"):</strong> @turn.Text
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5>Your Blog Post</h5>
+                        <div>
+                            <button class="btn btn-primary" @onclick="CopyToClipboard">📋 Copy</button>
+                            <button class="btn btn-success" @onclick="DownloadMarkdown">💾 Download</button>
+                            <button class="btn btn-secondary" @onclick="StartNew">🎙️ New Interview</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="blog-preview" style="white-space: pre-wrap; line-height: 1.8; font-size: 1.05rem;">
+                            @blogPost
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? SessionData { get; set; }
+
+    private bool isGenerating = false;
+    private string blogPost = "";
+    private string errorMessage = "";
+    private string topic = "";
+    private PodcastSession? interviewSession = null;
+    private bool showTranscript = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GenerateBlogPost();
+    }
+
+    private void ToggleTranscript()
+    {
+        showTranscript = !showTranscript;
+    }
+
+    private async Task GenerateBlogPost()
+    {
+        isGenerating = true;
+        
+        string transcript = "";
+        
+        // Try to parse the session data if available
+        if (!string.IsNullOrEmpty(SessionData))
+        {
+            try
+            {
+                interviewSession = JsonSerializer.Deserialize<PodcastSession>(SessionData);
+                if (interviewSession != null)
+                {
+                    topic = interviewSession.Topic;
+                    
+                    // Build transcript from conversation
+                    foreach (var turn in interviewSession.Conversation)
+                    {
+                        transcript += $"{turn.Speaker}: {turn.Text}\n\n";
+                    }
+                }
+            }
+            catch
+            {
+                // If parsing fails, use fallback
+            }
+        }
+        
+        // Fallback if no session data
+        if (string.IsNullOrEmpty(transcript))
+        {
+            topic = "Sample Topic";
+            transcript = "AI: What inspired you to write about " + topic + "?\n" +
+                         "User: I've been thinking about this topic for a while and wanted to share my insights.\n\n" +
+                         "AI: What do you think are the key points people should understand?\n" +
+                         "User: The most important thing is understanding the fundamentals first before diving deep.\n\n" +
+                         "AI: Can you share any personal experiences related to this?\n" +
+                         "User: Yes, I've worked on several projects where this was crucial to success.";
+        }
+
+        try
+        {
+            blogPost = await AIService.GenerateBlogPostAsync(topic, transcript);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to generate blog post: {ex.Message}";
+        }
+
+        isGenerating = false;
+        StateHasChanged();
+    }
+
+    private async Task CopyToClipboard()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("copyToClipboard", blogPost);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to copy: {ex.Message}";
+        }
+    }
+
+    private async Task DownloadMarkdown()
+    {
+        try
+        {
+            var filename = $"blog-post-{DateTime.Now:yyyy-MM-dd-HHmmss}.txt";
+            await JS.InvokeVoidAsync("downloadTextFile", filename, blogPost);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to download: {ex.Message}";
+        }
+    }
+
+    private void StartNew()
+    {
+        Navigation.NavigateTo("");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("stopAllAudio");
+        }
+        catch
+        {
+            // Silent fail
+        }
+    }
+}

@@ -1,0 +1,183 @@
+@page "/"
+@using Pod2Blog.Services
+@using System.Text.Json
+@using Microsoft.JSInterop
+@inject ILocalStorageService LocalStorage
+@inject NavigationManager NavigationManager
+@inject IAIService AIService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Pod2Blog - Start Your Podcast</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="mb-2">🎙️ Pod2Blog</h1>
+                    <p class="lead mb-0">Transform your ideas into blog posts through an interactive podcast-style interview.</p>
+                </div>
+                <a href="settings" class="btn btn-outline-secondary">
+                    <span style="font-size: 1.2rem;">⚙️</span> Settings
+                </a>
+            </div>
+
+            @if (!isConfigured)
+            {
+                <div class="alert alert-warning">
+                    <h5>⚠️ AI Service Not Configured</h5>
+                    <p>Please configure your AI service before starting an interview.</p>
+                    <a href="settings" class="btn btn-primary">Go to Settings</a>
+                </div>
+            }
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h3>How it works:</h3>
+                    <ol>
+                        <li>Enter a topic you want to write about</li>
+                        <li>Have a conversation with the AI interviewer</li>
+                        <li>Your responses are transcribed automatically</li>
+                        <li>Get a polished blog post generated from your conversation</li>
+                    </ol>
+                    
+                    <div class="mt-4">
+                        <label for="topic" class="form-label"><strong>What do you want to write about?</strong></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="topic" 
+                               @bind="blogTopic" 
+                               @bind:event="oninput"
+                               @onkeydown="HandleKeyDown"
+                               placeholder="e.g., The future of AI in healthcare" 
+                               autofocus />
+                    </div>
+                    
+                    <div class="mt-3">
+                        <label for="outline" class="form-label">
+                            <strong>Outline (Optional)</strong>
+                            <button class="btn btn-sm btn-outline-primary ms-2" @onclick="GenerateOutline" disabled="@(string.IsNullOrWhiteSpace(blogTopic) || isGeneratingOutline)">
+                                @if (isGeneratingOutline)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                ✨ Generate from Topic
+                            </button>
+                        </label>
+                        <textarea class="form-control" 
+                                  id="outline" 
+                                  @bind="blogOutline"
+                                  rows="6"
+                                  placeholder="Optional: Add bullet points to guide the interview...&#10;- Key point 1&#10;- Key point 2&#10;- Key point 3"></textarea>
+                        <small class="text-muted">Add an outline to structure the interview, or click "Generate from Topic" to create one automatically</small>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-lg mt-3" @onclick="StartInterview" disabled="@(blogTopic.Length == 0 || !isConfigured)">
+                        Start Interview 🎤
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string blogTopic = "";
+    private string blogOutline = "";
+    private bool isConfigured = false;
+    private bool isGeneratingOutline = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckConfiguration();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("eval", "document.getElementById('topic')?.focus()");
+            }
+            catch
+            {
+                // Silently ignore if focus fails
+            }
+        }
+    }
+
+    private async Task CheckConfiguration()
+    {
+        var configJson = await LocalStorage.GetItemAsync("aiConfig");
+        if (!string.IsNullOrEmpty(configJson))
+        {
+            try
+            {
+                var config = JsonSerializer.Deserialize<Models.AIConfiguration>(configJson);
+                isConfigured = config != null && !string.IsNullOrWhiteSpace(config.ApiKey);
+            }
+            catch
+            {
+                isConfigured = false;
+            }
+        }
+    }
+
+    private async Task GenerateOutline()
+    {
+        if (string.IsNullOrWhiteSpace(blogTopic)) return;
+        
+        isGeneratingOutline = true;
+        StateHasChanged();
+        
+        try
+        {
+            blogOutline = await AIService.GenerateOutlineAsync(blogTopic);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to generate outline: {ex.Message}");
+            blogOutline = "Failed to generate outline. Please try again or enter manually.";
+        }
+        finally
+        {
+            isGeneratingOutline = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StartInterview()
+    {
+        if (blogTopic.Length > 0 && isConfigured)
+        {
+            var queryParams = $"topic={Uri.EscapeDataString(blogTopic)}";
+            if (!string.IsNullOrWhiteSpace(blogOutline))
+            {
+                queryParams += $"&outline={Uri.EscapeDataString(blogOutline)}";
+            }
+            NavigationManager.NavigateTo($"interview?{queryParams}");
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            StartInterview();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("stopAllAudio");
+        }
+        catch
+        {
+            // Silent fail
+        }
+    }
+}
