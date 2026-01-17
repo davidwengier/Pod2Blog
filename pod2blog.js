@@ -6,9 +6,21 @@ window.Pod2Blog = {
     pauseDetectionSeconds: 3,
     dotNetHelper: null,
     
-    initializeSpeechRecognition: function(dotNetHelper) {
+    initializeSpeechRecognition: async function(dotNetHelper) {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
             console.error('Speech recognition not supported');
+            return false;
+        }
+
+        // Explicitly request microphone permission first
+        try {
+            console.log('Requesting microphone permission...');
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('Microphone permission granted');
+            // Stop the stream immediately - we just needed permission
+            stream.getTracks().forEach(track => track.stop());
+        } catch (err) {
+            console.error('Microphone permission denied:', err);
             return false;
         }
 
