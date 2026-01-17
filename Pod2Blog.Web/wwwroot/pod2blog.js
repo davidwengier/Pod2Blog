@@ -106,7 +106,7 @@ window.Pod2Blog = {
         }
     },
 
-    startRecording: function(enablePauseDetection = false, pauseSeconds = 3) {
+    startRecording: function(enablePauseDetection = false, pauseSeconds = 2) {
         if (this.recognition) {
             this.pauseDetectionEnabled = enablePauseDetection;
             this.pauseDetectionSeconds = pauseSeconds;

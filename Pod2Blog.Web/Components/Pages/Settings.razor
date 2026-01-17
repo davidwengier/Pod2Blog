@@ -175,6 +175,53 @@
                 </div>
             </div>
 
+            <!-- Microphone Test Section -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">🎤 Test Your Microphone</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">Test your microphone and speech recognition before starting an interview.</p>
+                    
+                    @if (!string.IsNullOrEmpty(micTestError))
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Error:</strong> @micTestError
+                        </div>
+                    }
+                    
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-primary" @onclick="StartMicTest" disabled="@isMicTesting">
+                            @if (isMicTesting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                @:🎙️ Listening...
+                            }
+                            else
+                            {
+                                @:🎤 Start Test
+                            }
+                        </button>
+                        @if (isMicTesting)
+                        {
+                            <button class="btn btn-danger" @onclick="StopMicTest">
+                                ⏹️ Stop
+                            </button>
+                        }
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(micTestTranscript))
+                    {
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">Transcript:</h6>
+                                <p class="mb-0" style="white-space: pre-wrap;">@micTestTranscript</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
             <!-- Action Buttons -->
             <div class="d-flex gap-2 mb-4">
                 <button class="btn btn-primary" @onclick="SaveConfiguration" disabled="@isSaving">
@@ -200,6 +247,12 @@
     private string successMessage = "";
     private string errorMessage = "";
     private List<VoiceInfo> availableVoices = new();
+    
+    // Microphone test
+    private bool isMicTesting = false;
+    private string micTestTranscript = "";
+    private string micTestError = "";
+    private DotNetObjectReference<Settings>? dotNetRef;
 
     public class VoiceInfo
     {
@@ -394,11 +447,75 @@
         }
     }
 
+    private async Task StartMicTest()
+    {
+        micTestError = "";
+        micTestTranscript = "";
+        isMicTesting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Initialize speech recognition for the test
+            dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("Pod2Blog.initializeSpeechRecognition", dotNetRef);
+            
+            // Start recording without auto-pause
+            await JS.InvokeVoidAsync("Pod2Blog.startRecording", false, 0);
+        }
+        catch (Exception ex)
+        {
+            micTestError = $"Failed to start microphone: {ex.Message}";
+            isMicTesting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopMicTest()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("Pod2Blog.stopRecording");
+        }
+        catch { /* Silent fail */ }
+        
+        isMicTesting = false;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnTranscriptUpdate(string transcript)
+    {
+        if (isMicTesting)
+        {
+            micTestTranscript = transcript;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnRecognitionError(string error)
+    {
+        if (isMicTesting)
+        {
+            micTestError = $"Speech recognition error: {error}";
+            isMicTesting = false;
+            StateHasChanged();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
         {
             await JS.InvokeVoidAsync("stopAllAudio");
+            
+            if (isMicTesting)
+            {
+                await JS.InvokeVoidAsync("Pod2Blog.stopRecording");
+            }
+            
+            dotNetRef?.Dispose();
         }
         catch
         {

@@ -14,5 +14,5 @@ public class AIConfiguration
     
     // Auto-pause detection
     public bool EnableAutoPause { get; set; } = true;
-    public int AutoPauseSeconds { get; set; } = 3;
+    public int AutoPauseSeconds { get; set; } = 2;
 }
