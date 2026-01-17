@@ -61,24 +61,62 @@ Keep each point short (5-10 words max).";
         return await CallOpenAIAsync(systemPrompt, userPrompt);
     }
 
-    public async Task<string> GenerateBlogPostAsync(string topic, string conversationTranscript)
+    public async Task<string> GenerateBlogPostAsync(string topic, string conversationTranscript, BlogFidelity fidelity = BlogFidelity.Balanced)
     {
-        var systemPrompt = @"You are an expert blog writer. Your task is to write an authentic, engaging blog post based on ideas shared during a conversation.
+        var systemPrompt = fidelity switch
+        {
+            BlogFidelity.StrictlyFaithful => @"You are an expert blog writer. Your task is to write an authentic blog post ONLY using ideas explicitly shared during the conversation.
 
-IMPORTANT INSTRUCTIONS:
+CRITICAL - STRICT FIDELITY RULES:
+- ONLY use information, examples, and ideas that were actually mentioned in the conversation
+- DO NOT add facts, statistics, or context that weren't discussed
+- DO NOT elaborate beyond what was said
+- If the conversation is brief, keep the post brief
 - Write as if the author sat down and wrote this post themselves, in first person
 - DO NOT mention that this came from a conversation, interview, or podcast
 - DO NOT quote the conversation or use quotation marks
 - DO NOT structure it as a Q&A or dialogue
-- Extract the key ideas, insights, examples, and stories from the conversation
+- Use proper markdown formatting with a title (# ), subheadings (##, ###), and natural flow
 - Write in a natural, authentic voice that sounds like the author's own writing
-- Use proper markdown formatting with a compelling title (# ), subheadings (##, ###), paragraphs, and natural flow
+
+Your job is to organize and polish what WAS said, not to add what WASN'T said.",
+
+            BlogFidelity.Enhanced => @"You are an expert blog writer. Your task is to write a comprehensive, engaging blog post based on ideas shared during a conversation, with thoughtful elaboration and additional context where helpful.
+
+INSTRUCTIONS:
+- Write as if the author sat down and wrote this post themselves, in first person
+- Use the conversation as a foundation, then enhance with relevant context, examples, and insights
+- Feel free to add helpful background information, statistics, or related concepts that support the core ideas
+- DO NOT mention that this came from a conversation, interview, or podcast
+- DO NOT quote the conversation or use quotation marks
+- DO NOT structure it as a Q&A or dialogue
+- Use proper markdown formatting with a compelling title (# ), subheadings (##, ###), and natural flow
 - Start with an engaging introduction that hooks the reader
 - Organize the content logically with clear sections
 - End with a meaningful conclusion or call to action
 - The tone should be conversational yet polished, as if writing directly to the reader
 
-Think of the conversation as raw material to extract insights from, then write a cohesive, standalone blog post.";
+Think of the conversation as a starting point, then craft a complete, compelling blog post.",
+
+            _ => @"You are an expert blog writer. Your task is to write an authentic, engaging blog post based on ideas shared during a conversation.
+
+IMPORTANT INSTRUCTIONS:
+- Write as if the author sat down and wrote this post themselves, in first person
+- Focus primarily on ideas from the conversation, with light elaboration for clarity and flow
+- You may add brief context or polish rough ideas, but stay close to what was discussed
+- DO NOT mention that this came from a conversation, interview, or podcast
+- DO NOT quote the conversation or use quotation marks
+- DO NOT structure it as a Q&A or dialogue
+- Extract the key ideas, insights, examples, and stories from the conversation
+- Write in a natural, authentic voice that sounds like the author's own writing
+- Use proper markdown formatting with a compelling title (# ), subheadings (##, ###), and natural flow
+- Start with an engaging introduction that hooks the reader
+- Organize the content logically with clear sections
+- End with a meaningful conclusion or call to action
+- The tone should be conversational yet polished, as if writing directly to the reader
+
+Think of the conversation as the core material, with light polish for readability."
+        };
 
         var userPrompt = $@"Topic: {topic}
 

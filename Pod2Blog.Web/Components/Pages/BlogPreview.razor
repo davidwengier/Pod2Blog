@@ -61,12 +61,38 @@
                 }
 
                 <div class="card mb-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5>Your Blog Post</h5>
-                        <div>
-                            <button class="btn btn-primary" @onclick="CopyToClipboard">📋 Copy</button>
-                            <button class="btn btn-success" @onclick="DownloadMarkdown">💾 Download</button>
-                            <button class="btn btn-secondary" @onclick="StartNew">🎙️ New Interview</button>
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="mb-0">Your Blog Post</h5>
+                            <div>
+                                <button class="btn btn-primary btn-sm" @onclick="CopyToClipboard">📋 Copy</button>
+                                <button class="btn btn-success btn-sm" @onclick="DownloadMarkdown">💾 Download</button>
+                                <button class="btn btn-secondary btn-sm" @onclick="StartNew">🎙️ New Interview</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Fidelity Control -->
+                        <div class="border-top pt-2 mt-2">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <label class="form-label mb-1"><strong>Content Fidelity:</strong></label>
+                                    <select class="form-select form-select-sm" @bind="selectedFidelity">
+                                        <option value="@BlogFidelity.StrictlyFaithful">📝 Strictly Faithful - Only what was said (no elaboration)</option>
+                                        <option value="@BlogFidelity.Balanced">⚖️ Balanced - What was said plus light polish (default)</option>
+                                        <option value="@BlogFidelity.Enhanced">✨ Enhanced - Full elaboration with context</option>
+                                    </select>
+                                    <small class="text-muted">Choose how much the AI can elaborate beyond the interview content</small>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="RegenerateBlogPost" disabled="@isGenerating">
+                                        @if (isGenerating)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                        }
+                                        🔄 Regenerate
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -91,6 +117,8 @@
     private string topic = "";
     private PodcastSession? interviewSession = null;
     private bool showTranscript = false;
+    private BlogFidelity selectedFidelity = BlogFidelity.Balanced;
+    private string transcript = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,8 +133,9 @@
     private async Task GenerateBlogPost()
     {
         isGenerating = true;
+        errorMessage = ""; // Clear any previous errors
         
-        string transcript = "";
+        transcript = "";
         
         // Try to parse the session data if available
         if (!string.IsNullOrEmpty(SessionData))
@@ -145,11 +174,36 @@
 
         try
         {
-            blogPost = await AIService.GenerateBlogPostAsync(topic, transcript);
+            blogPost = await AIService.GenerateBlogPostAsync(topic, transcript, selectedFidelity);
         }
         catch (Exception ex)
         {
             errorMessage = $"Failed to generate blog post: {ex.Message}";
+        }
+
+        isGenerating = false;
+        StateHasChanged();
+    }
+
+    private async Task RegenerateBlogPost()
+    {
+        if (string.IsNullOrEmpty(transcript))
+        {
+            errorMessage = "No interview data available to regenerate.";
+            return;
+        }
+
+        isGenerating = true;
+        errorMessage = ""; // Clear any previous errors
+        StateHasChanged();
+
+        try
+        {
+            blogPost = await AIService.GenerateBlogPostAsync(topic, transcript, selectedFidelity);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to regenerate blog post: {ex.Message}";
         }
 
         isGenerating = false;
