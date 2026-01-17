@@ -7,6 +7,13 @@ window.Pod2Blog = {
     dotNetHelper: null,
     
     initializeSpeechRecognition: async function(dotNetHelper) {
+        console.log('Checking Speech Recognition support...');
+        console.log('webkitSpeechRecognition:', 'webkitSpeechRecognition' in window);
+        console.log('SpeechRecognition:', 'SpeechRecognition' in window);
+        console.log('User agent:', navigator.userAgent);
+        console.log('Protocol:', window.location.protocol);
+        console.log('Hostname:', window.location.hostname);
+        
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
             console.error('Speech recognition not supported');
             return false;
@@ -26,10 +33,19 @@ window.Pod2Blog = {
 
         this.dotNetHelper = dotNetHelper;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        console.log('Using SpeechRecognition:', SpeechRecognition);
+        
         this.recognition = new SpeechRecognition();
+        console.log('SpeechRecognition instance created');
+        
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
+        console.log('SpeechRecognition configured:', {
+            continuous: this.recognition.continuous,
+            interimResults: this.recognition.interimResults,
+            lang: this.recognition.lang
+        });
 
         let finalTranscript = '';
         const self = this;
@@ -95,9 +111,20 @@ window.Pod2Blog = {
             this.pauseDetectionEnabled = enablePauseDetection;
             this.pauseDetectionSeconds = pauseSeconds;
             console.log(`Starting recording with pause detection: ${enablePauseDetection} (${pauseSeconds}s)`);
-            this.recognition.start();
-            return true;
+            
+            try {
+                this.recognition.start();
+                console.log('Speech recognition started successfully');
+                return true;
+            } catch (err) {
+                console.error('Failed to start speech recognition:', err);
+                if (this.dotNetHelper) {
+                    this.dotNetHelper.invokeMethodAsync('OnRecognitionError', 'start-failed: ' + err.message);
+                }
+                return false;
+            }
         }
+        console.error('Recognition object not initialized');
         return false;
     },
 
