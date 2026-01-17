@@ -1,6 +1,6 @@
 using Microsoft.JSInterop;
 
-namespace Pod2Blog.Services;
+namespace Pod2Blog.Web.Services;
 
 public class LocalStorageService : ILocalStorageService
 {

@@ -1,9 +1,9 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Pod2Blog.Models;
+using Pod2Blog.Web.Models;
 
-namespace Pod2Blog.Services;
+namespace Pod2Blog.Web.Services;
 
 public class OpenAIService : IAIService
 {

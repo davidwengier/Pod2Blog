@@ -1,4 +1,4 @@
-namespace Pod2Blog.Models;
+namespace Pod2Blog.Web.Models;
 
 public class PodcastSession
 {

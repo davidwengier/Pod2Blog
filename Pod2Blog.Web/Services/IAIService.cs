@@ -1,4 +1,4 @@
-namespace Pod2Blog.Services;
+namespace Pod2Blog.Web.Services;
 
 public interface IAIService
 {
