@@ -1,0 +1,38 @@
+/* Settings page specific styles */
+
+/* Configuration card sections */
+.config-section {
+    margin-bottom: 1.5rem;
+}
+
+.config-section:last-child {
+    margin-bottom: 0;
+}
+
+/* Form helper text */
+.form-help-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+/* Token display with monospace */
+.token-display {
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    word-break: break-all;
+}
+
+/* Voice settings sliders */
+.voice-slider {
+    width: 100%;
+}
+
+.slider-value {
+    display: inline-block;
+    min-width: 3rem;
+    text-align: right;
+    font-weight: 600;
+}

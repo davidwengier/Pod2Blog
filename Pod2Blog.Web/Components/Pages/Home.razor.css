@@ -1,0 +1,30 @@
+/* Home page specific styles */
+
+.topic-input-section {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.hero-section {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.feature-list {
+    list-style: none;
+    padding: 0;
+}
+
+.feature-list li {
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.feature-list li::before {
+    content: "✓";
+    color: #28a745;
+    font-weight: bold;
+    font-size: 1.2rem;
+}

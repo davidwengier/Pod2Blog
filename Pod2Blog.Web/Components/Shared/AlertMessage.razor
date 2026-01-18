@@ -1,0 +1,46 @@
+@* Reusable alert message component *@
+
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="alert alert-@Type.ToString().ToLower() @(Dismissible ? "alert-dismissible fade show" : "")">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <strong>@Title</strong>
+            <br />
+        }
+        @((MarkupString)Message)
+        @if (Dismissible)
+        {
+            <button type="button" class="btn-close" @onclick="OnDismiss"></button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Message { get; set; } = "";
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public AlertType Type { get; set; } = AlertType.Info;
+
+    [Parameter]
+    public bool Dismissible { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnDismiss { get; set; }
+
+    public enum AlertType
+    {
+        Primary,
+        Secondary,
+        Success,
+        Danger,
+        Warning,
+        Info,
+        Light,
+        Dark
+    }
+}

@@ -1,0 +1,46 @@
+/* Blog preview page specific styles */
+
+.blog-preview {
+    line-height: 1.8;
+    font-size: 1.1rem;
+}
+
+.blog-preview h1 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.blog-preview h2 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.blog-preview h3 {
+    margin-top: 1.2rem;
+    margin-bottom: 0.6rem;
+}
+
+.blog-preview p {
+    margin-bottom: 1rem;
+}
+
+.blog-preview code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+}
+
+.blog-preview pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    overflow-x: auto;
+}
+
+.blog-preview blockquote {
+    border-left: 4px solid #007bff;
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: #6c757d;
+}

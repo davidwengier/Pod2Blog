@@ -1,0 +1,35 @@
+@* Displays the conversation history *@
+@using Pod2Blog.Web.Models
+
+<div class="card-body" style="max-height: 500px; overflow-y: auto;" id="conversation-container">
+    @foreach (var turn in Conversation)
+    {
+        <div class="conversation-turn mb-3">
+            @if (turn.Speaker == "AI")
+            {
+                <div class="d-flex align-items-start">
+                    <div class="me-2" style="font-size: 1.5rem;">🤖</div>
+                    <div class="flex-grow-1">
+                        <strong>Interviewer:</strong>
+                        <p class="mb-0">@turn.Text</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex align-items-start">
+                    <div class="me-2" style="font-size: 1.5rem;">👤</div>
+                    <div class="flex-grow-1">
+                        <strong>You:</strong>
+                        <p class="mb-0">@turn.Text</p>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<ConversationTurn> Conversation { get; set; } = new();
+}
