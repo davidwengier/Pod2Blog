@@ -203,3 +203,163 @@ main[b-t91g1kgf31] {
         overflow-y: auto;
     }
 }
+/* /Components/Pages/BlogPreview.razor.rz.scp.css */
+/* Blog preview page specific styles */
+
+.blog-preview[b-oe016ev0ul] {
+    line-height: 1.8;
+    font-size: 1.1rem;
+}
+
+.blog-preview h1[b-oe016ev0ul] {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.blog-preview h2[b-oe016ev0ul] {
+    margin-top: 1.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.blog-preview h3[b-oe016ev0ul] {
+    margin-top: 1.2rem;
+    margin-bottom: 0.6rem;
+}
+
+.blog-preview p[b-oe016ev0ul] {
+    margin-bottom: 1rem;
+}
+
+.blog-preview code[b-oe016ev0ul] {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+}
+
+.blog-preview pre[b-oe016ev0ul] {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    overflow-x: auto;
+}
+
+.blog-preview blockquote[b-oe016ev0ul] {
+    border-left: 4px solid #007bff;
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: #6c757d;
+}
+/* /Components/Pages/Home.razor.rz.scp.css */
+/* Home page specific styles */
+
+.topic-input-section[b-vmbaqlvfpn] {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.hero-section[b-vmbaqlvfpn] {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.feature-list[b-vmbaqlvfpn] {
+    list-style: none;
+    padding: 0;
+}
+
+.feature-list li[b-vmbaqlvfpn] {
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.feature-list li[b-vmbaqlvfpn]::before {
+    content: "✓";
+    color: #28a745;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+/* /Components/Pages/Interview.razor.rz.scp.css */
+/* Interview page specific styles */
+
+/* Conversation turn animations */
+.conversation-turn[b-fyhrg9tuc2] {
+    animation: fadeIn-b-fyhrg9tuc2 0.3s ease-in;
+}
+
+@keyframes fadeIn-b-fyhrg9tuc2 {
+    from { 
+        opacity: 0; 
+        transform: translateY(10px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+/* Recording indicator */
+.recording-indicator[b-fyhrg9tuc2] {
+    animation: pulse-b-fyhrg9tuc2 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-b-fyhrg9tuc2 {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Transcript display */
+.transcript-display[b-fyhrg9tuc2] {
+    background-color: #f8f9fa;
+    border-left: 3px solid #007bff;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0.25rem;
+}
+
+/* Speaking indicator */
+.speaking-indicator[b-fyhrg9tuc2] {
+    display: inline-block;
+    animation: pulse-b-fyhrg9tuc2 1s ease-in-out infinite;
+}
+/* /Components/Pages/Settings.razor.rz.scp.css */
+/* Settings page specific styles */
+
+/* Configuration card sections */
+.config-section[b-3jn6707qyw] {
+    margin-bottom: 1.5rem;
+}
+
+.config-section:last-child[b-3jn6707qyw] {
+    margin-bottom: 0;
+}
+
+/* Form helper text */
+.form-help-text[b-3jn6707qyw] {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+/* Token display with monospace */
+.token-display[b-3jn6707qyw] {
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    word-break: break-all;
+}
+
+/* Voice settings sliders */
+.voice-slider[b-3jn6707qyw] {
+    width: 100%;
+}
+
+.slider-value[b-3jn6707qyw] {
+    display: inline-block;
+    min-width: 3rem;
+    text-align: right;
+    font-weight: 600;
+}
