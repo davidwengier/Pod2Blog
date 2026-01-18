@@ -1,0 +1,73 @@
+@using Pod2Blog.Web.Services
+@inject IVersionService VersionService
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+@if (_showUpdatePrompt)
+{
+    <div class="update-notification-overlay">
+        <div class="update-notification">
+            <div class="update-notification-content">
+                <h4>🎉 Update Available!</h4>
+                <p>A new version of Pod2Blog is available.</p>
+                <p class="text-muted small">Reload to get the latest features and improvements.</p>
+                <div class="update-notification-actions">
+                    <button class="btn btn-primary" @onclick="ReloadApp">
+                        <span class="me-2">🔄</span> Reload Now
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="DismissUpdate">
+                        Later
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _showUpdatePrompt = false;
+
+    protected override void OnInitialized()
+    {
+        VersionService.OnUpdateAvailable += HandleUpdateAvailable;
+    }
+
+    private void HandleUpdateAvailable()
+    {
+        _showUpdatePrompt = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ReloadApp()
+    {
+        // Clear service worker cache if present
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    registrations.forEach(registration => registration.unregister());
+                });
+            }
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => caches.delete(name));
+                });
+            }
+        ");
+        
+        // Wait a bit for cache clearing
+        await Task.Delay(100);
+        
+        // Hard reload the page
+        await JSRuntime.InvokeVoidAsync("location.reload", true);
+    }
+
+    private void DismissUpdate()
+    {
+        _showUpdatePrompt = false;
+    }
+
+    public void Dispose()
+    {
+        VersionService.OnUpdateAvailable -= HandleUpdateAvailable;
+    }
+}

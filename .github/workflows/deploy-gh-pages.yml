@@ -20,6 +20,13 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
+    - name: Generate version.json
+      run: |
+        VERSION="${GITHUB_SHA:0:7}"
+        BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
+        echo "{\"version\": \"$VERSION\", \"buildDate\": \"$BUILD_DATE\"}" > Pod2Blog.Web/wwwroot/version.json
+        cat Pod2Blog.Web/wwwroot/version.json
+
     - name: Restore dependencies
       run: dotnet restore Pod2Blog.Web/Pod2Blog.Web.csproj
 

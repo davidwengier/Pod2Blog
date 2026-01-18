@@ -13,5 +13,6 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 // Register services
 builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 builder.Services.AddScoped<IAIService, OpenAIService>();
+builder.Services.AddScoped<IVersionService, VersionService>();
 
 await builder.Build().RunAsync();

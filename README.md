@@ -121,6 +121,20 @@ dotnet publish -c Release
 - **Direct API Calls** - Browser makes API calls directly to GitHub Models
 - **No Backend Required** - Can be hosted as static files
 
+### Version Detection & Auto-Update
+The app includes automatic version detection that prompts users (especially on mobile) when a new version is available:
+
+- **Automatic Versioning**: GitHub Actions automatically generates version from commit SHA
+- **Periodic Checks**: Checks for updates every 5 minutes
+- **Cache-Busting**: `version.json` is never cached, ensuring fresh version info
+- **Update Prompt**: Shows a friendly modal when an update is available
+- **Hard Reload**: Clears all caches and service workers before reloading
+- **Mobile Optimized**: UI designed for mobile devices with responsive design
+
+**Version updates are fully automatic** - just push to main and GitHub Actions handles everything!
+
+See [VERSION_UPDATE_GUIDE.md](Pod2Blog.Web/VERSION_UPDATE_GUIDE.md) for details.
+
 ### Key Components
 
 - **`/Components/Pages/Home.razor`**: Topic selection and interview start
