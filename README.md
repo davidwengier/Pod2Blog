@@ -190,7 +190,7 @@ Pod2Blog/
 
 ### Running Tests
 
-Automated browser tests using Playwright:
+Automated browser tests using Playwright and xUnit:
 
 ```bash
 # Install Playwright browsers (one-time setup)

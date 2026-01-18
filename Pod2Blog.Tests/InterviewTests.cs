@@ -1,32 +1,44 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
-using NUnit.Framework;
 
 namespace Pod2Blog.Tests;
 
-[Parallelizable(ParallelScope.Self)]
-[TestFixture]
-public class InterviewTests : PageTest
+public class InterviewTests : IAsyncLifetime
 {
     private const string BaseUrl = "http://localhost:5000";
-    private const int StartupTimeout = 30000; // 30 seconds for app to start
     
-    [SetUp]
-    public async Task Setup()
+    private IPlaywright? _playwright;
+    private IBrowser? _browser;
+    private IPage? _page;
+
+    public async Task InitializeAsync()
     {
+        _playwright = await Playwright.CreateAsync();
+        _browser = await _playwright.Chromium.LaunchAsync(new() { Headless = true });
+        var context = await _browser.NewContextAsync();
+        _page = await context.NewPageAsync();
+        
         // Navigate to the app
-        await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await _page.GotoAsync(BaseUrl);
+        await _page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
-    [Test]
+    public async Task DisposeAsync()
+    {
+        if (_page != null) await _page.CloseAsync();
+        if (_browser != null) await _browser.DisposeAsync();
+        _playwright?.Dispose();
+    }
+
+    private IPage Page => _page ?? throw new InvalidOperationException("Page not initialized");
+
+    [Fact]
     public async Task HomePage_ShouldLoad()
     {
         // Verify the home page loads
-        await Expect(Page.Locator("h1")).ToContainTextAsync("Pod2Blog");
+        await Assertions.Expect(Page.Locator("h1")).ToContainTextAsync("Pod2Blog");
     }
 
-    [Test]
+    [Fact]
     public async Task SettingsPage_ShouldNavigateAndShowPATGuide()
     {
         // Navigate to settings
@@ -34,13 +46,13 @@ public class InterviewTests : PageTest
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         
         // Verify we're on settings page (Settings is in h2, not h1)
-        await Expect(Page.Locator("h2")).ToContainTextAsync("Settings");
+        await Assertions.Expect(Page.Locator("h2")).ToContainTextAsync("Settings");
         
         // Verify PAT guide is visible
-        await Expect(Page.Locator("text=Create GitHub Token")).ToBeVisibleAsync();
+        await Assertions.Expect(Page.Locator("text=Create GitHub Token")).ToBeVisibleAsync();
     }
 
-    [Test]
+    [Fact]
     public async Task InterviewPage_TextMode_ShouldShowTextarea()
     {
         // First configure settings (simulate having API key)
@@ -66,10 +78,10 @@ public class InterviewTests : PageTest
         // Just verify the page loaded - don't wait for API calls to succeed
         // Look for the container that should be present
         var container = Page.Locator(".container");
-        await Expect(container).ToBeVisibleAsync();
+        await Assertions.Expect(container).ToBeVisibleAsync();
     }
 
-    [Test]
+    [Fact]
     public async Task Navigation_SubdirectoryPaths_ShouldWorkCorrectly()
     {
         // Test home navigation
@@ -83,15 +95,15 @@ public class InterviewTests : PageTest
         
         // Verify we can see the topic input (it's a regular text input, not placeholder search)
         var topicInput = Page.Locator("input#topic");
-        await Expect(topicInput).ToBeVisibleAsync();
+        await Assertions.Expect(topicInput).ToBeVisibleAsync();
         await topicInput.FillAsync("testing");
         
         // Start button should be disabled without configuration
         var startButton = Page.Locator("button:has-text('Start Interview')");
-        await Expect(startButton).ToBeVisibleAsync();
+        await Assertions.Expect(startButton).ToBeVisibleAsync();
     }
 
-    [Test]
+    [Fact]
     public async Task InterviewPage_TextMode_ShouldSubmitResponse()
     {
         // Configure mock settings
@@ -111,6 +123,6 @@ public class InterviewTests : PageTest
         // The actual behavior (text mode, switch button, etc.) depends on API responses
         // which we can't test without a real API key
         var container = Page.Locator(".container");
-        await Expect(container).ToBeVisibleAsync();
+        await Assertions.Expect(container).ToBeVisibleAsync();
     }
 }
