@@ -15,4 +15,8 @@ public class AIConfiguration
     // Auto-pause detection
     public bool EnableAutoPause { get; set; } = true;
     public int AutoPauseSeconds { get; set; } = 2;
+    
+    // Interview structure
+    public int InitialQuestionsCount { get; set; } = 6;
+    public int MaxFollowUpsPerQuestion { get; set; } = 1;
 }

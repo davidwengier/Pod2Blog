@@ -10,6 +10,8 @@ public enum BlogFidelity
 public interface IAIService
 {
     Task<string> GenerateInterviewQuestionAsync(string topic, List<string> previousQuestions, string? lastUserResponse = null, string? outline = null);
+    Task<List<string>> GenerateAllInterviewQuestionsAsync(string topic, int count, string? outline = null);
+    Task<string?> GenerateFollowUpQuestionAsync(string topic, string question, string userResponse, string? outline = null);
     Task<string> GenerateBlogPostAsync(string topic, string conversationTranscript, BlogFidelity fidelity = BlogFidelity.Balanced);
     Task<string> GenerateOutlineAsync(string topic);
 }

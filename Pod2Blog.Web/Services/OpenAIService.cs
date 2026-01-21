@@ -49,6 +49,72 @@ Ask about 5-7 questions total, then suggest wrapping up.";
         return await CallOpenAIAsync(systemPrompt, userPrompt);
     }
 
+    public async Task<List<string>> GenerateAllInterviewQuestionsAsync(string topic, int count, string? outline = null)
+    {
+        var systemPrompt = $@"You are a professional podcast interviewer. You're preparing to interview someone about '{topic}'.";
+        
+        if (!string.IsNullOrEmpty(outline))
+        {
+            systemPrompt += $@"
+
+Use this outline to guide your questions:
+{outline}
+
+Cover the key points in the outline during the interview, but keep the questions natural and conversational.";
+        }
+
+        systemPrompt += @"
+
+Generate a list of engaging, thoughtful questions for the interview.
+Each question should help draw out interesting insights and stories.
+Keep questions conversational and natural.
+Return ONLY the questions, one per line, numbered 1-" + count + @".";
+
+        var userPrompt = $"Generate exactly {count} interview questions about {topic}.";
+
+        var response = await CallOpenAIAsync(systemPrompt, userPrompt);
+        
+        // Parse the numbered list into individual questions
+        var questions = response.Split('\n')
+            .Select(q => q.Trim())
+            .Where(q => !string.IsNullOrWhiteSpace(q))
+            .Select(q => System.Text.RegularExpressions.Regex.Replace(q, @"^\d+[\.\)]\s*", "")) // Remove numbering
+            .ToList();
+            
+        return questions.Take(count).ToList();
+    }
+
+    public async Task<string?> GenerateFollowUpQuestionAsync(string topic, string question, string userResponse, string? outline = null)
+    {
+        var systemPrompt = $@"You are a professional podcast interviewer. You just asked a question and received a response.
+Analyze the response and decide if a follow-up question would add value to the interview about '{topic}'.";
+        
+        if (!string.IsNullOrEmpty(outline))
+        {
+            systemPrompt += $@"
+
+Keep the outline in mind:
+{outline}";
+        }
+
+        systemPrompt += @"
+
+If a natural follow-up question would help explore an interesting point deeper or clarify something important, generate it.
+If the response was complete and a follow-up would feel forced or redundant, return only 'NO_FOLLOWUP'.
+
+Keep follow-ups brief and natural.";
+
+        var userPrompt = $@"Question asked: {question}
+
+User's response: {userResponse}
+
+Should I ask a follow-up question? If yes, what should it be? If no, respond with only 'NO_FOLLOWUP'.";
+
+        var response = await CallOpenAIAsync(systemPrompt, userPrompt);
+        
+        return response.Trim() == "NO_FOLLOWUP" ? null : response;
+    }
+
     public async Task<string> GenerateOutlineAsync(string topic)
     {
         var systemPrompt = @"You are an expert content strategist. Generate a concise outline for a blog post on the given topic.

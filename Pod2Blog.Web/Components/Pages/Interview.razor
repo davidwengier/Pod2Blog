@@ -95,9 +95,6 @@
                                 <button class="btn btn-primary" @onclick="SubmitTypedResponse" disabled="@string.IsNullOrWhiteSpace(typedResponse)">
                                     💬 Submit Response
                                 </button>
-                                <button class="btn btn-warning" @onclick="SubmitTypedResponseAndWrapUp" disabled="@string.IsNullOrWhiteSpace(typedResponse)">
-                                    🎬 Submit & Wrap Up
-                                </button>
                             </div>
                         }
                         
@@ -129,8 +126,7 @@
                         <div class="d-flex justify-content-center gap-2 flex-wrap">
                             @if (isRecording && !useTextInput)
                             {
-                                <button class="btn btn-danger" @onclick="StopRecording">💬 I'm Done, Back to You</button>
-                                <button class="btn btn-warning" @onclick="StopRecordingAndWrapUp">🎬 I'm Done, Let's Wrap It Up</button>
+                                <button class="btn btn-danger" @onclick="StopRecording">💬 I'm Done Speaking</button>
                             }
                             else if (isGeneratingQuestion)
                             {
@@ -173,7 +169,6 @@
     private bool interviewStarted = false;
     private bool isGeneratingQuestion = false;
     private bool isRecording = false;
-    private bool isWrappingUp = false;
     private bool autoPauseEnabled = false;
     private int autoPauseSeconds = 3;
     private string currentQuestion = "";
@@ -184,6 +179,13 @@
     private bool shouldScrollToBottom = false;
     private bool useTextInput = false;
     private string typedResponse = "";
+    
+    // New structured interview fields
+    private List<string> preparedQuestions = new();
+    private int currentQuestionIndex = 0;
+    private int followUpsAskedForCurrentQuestion = 0;
+    private int maxFollowUpsPerQuestion = 1;
+    private int initialQuestionsCount = 6;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -199,11 +201,15 @@
                     useTextInput = true;
                 }
             }
-            catch (Exception ex)
+            catch
             {
                 speechRecognitionError = $"Speech recognition not available. Using text input mode instead.";
                 useTextInput = true;
             }
+            
+            // Load interview configuration
+            await LoadInterviewConfiguration();
+            
             StateHasChanged();
         }
         
@@ -212,6 +218,27 @@
         {
             shouldScrollToBottom = false;
             await ScrollToBottom();
+        }
+    }
+    
+    private async Task LoadInterviewConfiguration()
+    {
+        try
+        {
+            var configJson = await LocalStorageService.GetItemAsync("aiConfig");
+            if (!string.IsNullOrEmpty(configJson))
+            {
+                var config = System.Text.Json.JsonSerializer.Deserialize<AIConfiguration>(configJson);
+                if (config != null)
+                {
+                    initialQuestionsCount = config.InitialQuestionsCount;
+                    maxFollowUpsPerQuestion = config.MaxFollowUpsPerQuestion;
+                }
+            }
+        }
+        catch
+        {
+            // Use defaults if config can't be loaded
         }
     }
 
@@ -229,7 +256,45 @@
     private async Task StartInterview()
     {
         interviewStarted = true;
-        await GenerateNextQuestion();
+        isGeneratingQuestion = true;
+        StateHasChanged();
+        
+        // Generate all questions upfront
+        preparedQuestions = await AIService.GenerateAllInterviewQuestionsAsync(Topic, initialQuestionsCount, session.Outline);
+        currentQuestionIndex = 0;
+        
+        isGeneratingQuestion = false;
+        
+        // Ask the first question
+        await AskNextPreparedQuestion();
+    }
+
+    private async Task AskNextPreparedQuestion()
+    {
+        if (currentQuestionIndex >= preparedQuestions.Count)
+        {
+            // All questions asked, wrap up
+            await WrapUpInterview();
+            return;
+        }
+        
+        currentQuestion = preparedQuestions[currentQuestionIndex];
+        followUpsAskedForCurrentQuestion = 0;
+        
+        session.Conversation.Add(new ConversationTurn
+        {
+            Speaker = "AI",
+            Text = currentQuestion
+        });
+
+        shouldScrollToBottom = true;
+        StateHasChanged();
+
+        // Read question aloud if voice is enabled
+        await SpeakIfEnabled(currentQuestion);
+
+        // Automatically start recording after the question is asked
+        await StartRecording();
     }
 
     private async Task GenerateNextQuestion()
@@ -263,6 +328,22 @@
 
         // Automatically start recording after the question is asked
         await StartRecording();
+    }
+    
+    private async Task WrapUpInterview()
+    {
+        session.Conversation.Add(new ConversationTurn
+        {
+            Speaker = "AI",
+            Text = "Thanks for joining me! Let's turn this into a great blog post."
+        });
+        
+        shouldScrollToBottom = true;
+        StateHasChanged();
+        
+        // Navigate to blog preview
+        await Task.Delay(1500);
+        FinishInterview();
     }
 
     private async Task SpeakIfEnabled(string text)
@@ -370,12 +451,6 @@
         StateHasChanged();
     }
 
-    private async Task StopRecordingAndWrapUp()
-    {
-        isWrappingUp = true;
-        await StopRecording();
-    }
-
     [JSInvokable]
     public void OnTranscriptUpdate(string transcript)
     {
@@ -425,27 +500,48 @@
 
             currentTranscript = "";
             shouldScrollToBottom = true;
+            StateHasChanged();
             
-            // If wrapping up, just add a simple closing and finish
-            if (isWrappingUp)
+            // Check if we should ask a follow-up question
+            if (followUpsAskedForCurrentQuestion < maxFollowUpsPerQuestion)
             {
-                session.Conversation.Add(new ConversationTurn
-                {
-                    Speaker = "AI",
-                    Text = "Thanks for joining me! Let's turn this into a great blog post."
-                });
-                
-                shouldScrollToBottom = true;
+                isGeneratingQuestion = true;
                 StateHasChanged();
                 
-                // Navigate to blog preview
-                await Task.Delay(1500);
-                FinishInterview();
+                var lastResponse = session.Conversation.Last().Text;
+                var followUpQuestion = await AIService.GenerateFollowUpQuestionAsync(
+                    Topic, 
+                    currentQuestion, 
+                    lastResponse, 
+                    session.Outline
+                );
+                
+                isGeneratingQuestion = false;
+                
+                if (!string.IsNullOrEmpty(followUpQuestion))
+                {
+                    // AI decided a follow-up is valuable
+                    followUpsAskedForCurrentQuestion++;
+                    currentQuestion = followUpQuestion;
+                    
+                    session.Conversation.Add(new ConversationTurn
+                    {
+                        Speaker = "AI",
+                        Text = currentQuestion
+                    });
+                    
+                    shouldScrollToBottom = true;
+                    StateHasChanged();
+                    
+                    await SpeakIfEnabled(currentQuestion);
+                    await StartRecording();
+                    return;
+                }
             }
-            else
-            {
-                await GenerateNextQuestion();
-            }
+            
+            // Move to next prepared question
+            currentQuestionIndex++;
+            await AskNextPreparedQuestion();
         }
         
         StateHasChanged();
@@ -483,39 +579,54 @@
                 Text = typedResponse.Trim()
             });
 
+            var userResponse = typedResponse.Trim();
             typedResponse = "";
             shouldScrollToBottom = true;
             StateHasChanged();
             
-            await GenerateNextQuestion();
-        }
-    }
-
-    private async Task SubmitTypedResponseAndWrapUp()
-    {
-        if (!string.IsNullOrWhiteSpace(typedResponse))
-        {
-            isWrappingUp = true;
-            isRecording = false;
-            
-            session.Conversation.Add(new ConversationTurn
+            // Check if we should ask a follow-up question
+            if (followUpsAskedForCurrentQuestion < maxFollowUpsPerQuestion)
             {
-                Speaker = "User",
-                Text = typedResponse.Trim()
-            });
-
-            session.Conversation.Add(new ConversationTurn
-            {
-                Speaker = "AI",
-                Text = "Thanks for joining me! Let's turn this into a great blog post."
-            });
-
-            typedResponse = "";
-            shouldScrollToBottom = true;
-            StateHasChanged();
+                isGeneratingQuestion = true;
+                StateHasChanged();
+                
+                var followUpQuestion = await AIService.GenerateFollowUpQuestionAsync(
+                    Topic, 
+                    currentQuestion, 
+                    userResponse, 
+                    session.Outline
+                );
+                
+                isGeneratingQuestion = false;
+                
+                if (!string.IsNullOrEmpty(followUpQuestion))
+                {
+                    // AI decided a follow-up is valuable
+                    followUpsAskedForCurrentQuestion++;
+                    currentQuestion = followUpQuestion;
+                    
+                    session.Conversation.Add(new ConversationTurn
+                    {
+                        Speaker = "AI",
+                        Text = currentQuestion
+                    });
+                    
+                    shouldScrollToBottom = true;
+                    StateHasChanged();
+                    
+                    await SpeakIfEnabled(currentQuestion);
+                    
+                    if (!useTextInput)
+                    {
+                        await StartRecording();
+                    }
+                    return;
+                }
+            }
             
-            await Task.Delay(1500);
-            FinishInterview();
+            // Move to next prepared question
+            currentQuestionIndex++;
+            await AskNextPreparedQuestion();
         }
     }
 
